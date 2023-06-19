@@ -1,47 +1,82 @@
-/*
- *Author: Nguyen Minh Nhut
- *Date: 18/06/2023
- *Description: this program recieve from master with spi standard
-*/
+#define SCK  4 
+#define MOSI 5  
+#define MISO 6  
+#define SS   7  
 
+bool stateSlave = 1;
+uint8_t dataReceived = 0x00;
+uint8_t sizeDataReceived = 0;
+uint8_t dataTransmited = 0x00;
+uint8_t sizeDataTransmited = 0;
 
-#define SCK_PIN    4
-#define MOSI_PIN   5
-#define MISO_PIN   6
-#define SS_PIN     7
+void spiSoftTransmit();
+void spiSoftReceived();
+void spiSoftSlave();
 
-void SPI_Soft_Init(void);
-void SPI_Soft_Transmit(uint8_t mData);
-
-
-void setup() {
-  SPI_Soft_Init();
-}
-
-void loop() {
-  uint8_t rev;
-  rev=SPI_Receive();
-  delay(2000);
-
-}
-
-void SPI_Soft_Init()
+void setup()
 {
-  pinMode(SCK_PIN,INPUT);
-  pinMode(MOSI_PIN,INPUT);
-  pinMode(MISO_PIN,OUTPUT);
-  pinMode(SS_PIN,INPUT);
+  Serial.begin(115200);
+  pinMode(SCK, INPUT);
+  pinMode(MOSI, INPUT);
+  pinMode(SS, INPUT);
+  pinMode(MISO, OUTPUT);
+}
+
+void loop()
+{
+  if (digitalRead(SS) == HIGH) {
+    if (sizeDataReceived == 8) {
+      Serial.print("Data Received from Master: ");
+      Serial.println((char)dataReceived);
+      dataReceived = 0x00;
+      sizeDataReceived = 0;
+      stateSlave = 0;
+      dataTransmited = 88;
+    }
+    else
+    {
+      dataReceived = 0x00;
+      sizeDataReceived = 0;
+    }
+    if (sizeDataTransmited == 8) {
+      dataTransmited = 88;
+      sizeDataTransmited = 0;
+      stateSlave = 1;
+      Serial.println("Transmited Data");
+    }
+    else
+    {
+      sizeDataTransmited = 0;
+    }
+  }
 }
 
 
-uint8_t SPI_Receive(){
-  uint8_t dataReceive=0;
-  while(digitalRead(SS_PIN) == HIGH);          //waiting until SS=0. Start condition
-  for(int i=0;i<8;i++){
-    while(digitalRead(SCK_PIN)==LOW);          // waiting until SCK == 1 --> receive data
-      dataReceive = dataReceive | digitalRead(MOSI);
-      dataReceive = dataReceive<<1;
-    while(digitalRead(SCK_PIN)==HIGH);        //  waiting until SCK == 0 --> received 1 bit and prepare for process receive continue bit
-  }
-  return dataReceive;
+void spiSoftSlave()
+{
+  if (digitalRead(SS) == HIGH) return;
+  if (stateSlave)
+    spiSoftReceived();
+  else
+    spiSoftTransmit();
+}
+
+void spiSoftReceived()
+{
+  dataReceived = dataReceived << 1;
+  dataReceived = dataReceived | digitalRead(MOSI);   
+  delay(2);
+  sizeDataReceived++;
+}
+
+void spiSoftTransmit()
+{
+  uint8_t x = 0;
+  x = dataTransmited & 0x80; 
+  if (x > 0)
+    digitalWrite(MISO, HIGH);
+  else
+    digitalWrite(MISO, LOW);
+  dataTransmited = dataTransmited << 1; 
+  sizeDataTransmited++;
 }
