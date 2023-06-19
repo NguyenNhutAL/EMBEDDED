@@ -1,82 +1,80 @@
-#define SCK  4 
+#define SCK  4  
 #define MOSI 5  
-#define MISO 6  
-#define SS   7  
+#define MISO 6 
+#define SS   7 
 
-bool stateSlave = 1;
-uint8_t dataReceived = 0x00;
-uint8_t sizeDataReceived = 0;
-uint8_t dataTransmited = 0x00;
-uint8_t sizeDataTransmited = 0;
+uint8_t dataFromSlave = 0x00;
 
-void spiSoftTransmit();
-void spiSoftReceived();
-void spiSoftSlave();
+void spiSoftInit();
+void clockSignal();
+void spiSoftTransmitMaster(uint8_t mData);
+uint8_t spiSoftReceiveMaster();
 
-void setup()
-{
+void setup() {
+  pinMode(SCK, OUTPUT);
+  pinMode(MOSI, OUTPUT);
+  pinMode(SS, OUTPUT);
+  pinMode(MISO, INPUT);
   Serial.begin(115200);
-  pinMode(SCK, INPUT);
-  pinMode(MOSI, INPUT);
-  pinMode(SS, INPUT);
-  pinMode(MISO, OUTPUT);
+  spiSoftInit();
 }
 
 void loop()
 {
-  if (digitalRead(SS) == HIGH) {
-    if (sizeDataReceived == 8) {
-      Serial.print("Data Received from Master: ");
-      Serial.println((char)dataReceived);
-      dataReceived = 0x00;
-      sizeDataReceived = 0;
-      stateSlave = 0;
-      dataTransmited = 88;
-    }
-    else
-    {
-      dataReceived = 0x00;
-      sizeDataReceived = 0;
-    }
-    if (sizeDataTransmited == 8) {
-      dataTransmited = 88;
-      sizeDataTransmited = 0;
-      stateSlave = 1;
-      Serial.println("Transmited Data");
-    }
-    else
-    {
-      sizeDataTransmited = 0;
-    }
+  for (char i = 'A'; i <= 'Z'; i++) {
+    spiSoftTransmitMaster(i);
+    Serial.print("Send Data to Slave: ");
+    Serial.println(i);
+    delay(500);
+    dataFromSlave = spiSoftReceiveMaster();
+    Serial.print("Data Received from Slave: ");
+    Serial.println(dataFromSlave);
+    delay(500);
   }
 }
 
-
-void spiSoftSlave()
+void spiSoftInit()
 {
-  if (digitalRead(SS) == HIGH) return;
-  if (stateSlave)
-    spiSoftReceived();
-  else
-    spiSoftTransmit();
+  digitalWrite(SCK, LOW);
+  digitalWrite(MOSI, LOW);
+  digitalWrite(SS, HIGH);
 }
 
-void spiSoftReceived()
+void clockSignal()
 {
-  dataReceived = dataReceived << 1;
-  dataReceived = dataReceived | digitalRead(MOSI);   
-  delay(2);
-  sizeDataReceived++;
+  digitalWrite(SCK, HIGH);
+  delay(100);
+  digitalWrite(SCK, LOW);
+  delay(100);
 }
 
-void spiSoftTransmit()
+void spiSoftTransmitMaster(uint8_t mData)
 {
-  uint8_t x = 0;
-  x = dataTransmited & 0x80; 
-  if (x > 0)
-    digitalWrite(MISO, HIGH);
-  else
-    digitalWrite(MISO, LOW);
-  dataTransmited = dataTransmited << 1; 
-  sizeDataTransmited++;
+  uint8_t i = 0, x = 0;
+  digitalWrite(SS, LOW);
+  for (i = 0; i < 8; i++) {
+    x = mData & 0x80; 
+    if (x > 0)
+      digitalWrite(MOSI, HIGH);
+    else
+      digitalWrite(MOSI, LOW);
+    mData = mData << 1; 
+    clockSignal();
+    delay(2);
+  }
+  digitalWrite(SS, HIGH);
+}
+
+uint8_t spiSoftReceiveMaster()
+{
+  uint8_t _data = 0x00, i = 0;
+  digitalWrite(SS, LOW);
+  for (i = 0; i < 8; i++) {
+    clockSignal(); 
+    delay(2);
+    _data = _data << 1;     
+    _data = _data | digitalRead(MISO);  
+  }
+  digitalWrite(SS, HIGH);
+  return _data;
 }
